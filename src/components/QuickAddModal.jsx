@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useCRM } from '../context/CRMContext'
 import { STAGES, SERVICES } from '../utils/helpers'
 
-const QUICK_STAGES = STAGES.filter(s => s.id !== 'closed-won' && s.id !== 'closed-lost' && s.id !== 'do-not-call')
-
 export default function QuickAddModal({ onClose }) {
   const { addLead } = useCRM()
-  const navigate = useNavigate()
   const firstRef = useRef(null)
   const [form, setForm] = useState({
     businessName: '',
@@ -17,7 +13,6 @@ export default function QuickAddModal({ onClose }) {
     stage:        'cold',
     priority:     'Cold',
   })
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -28,18 +23,9 @@ export default function QuickAddModal({ onClose }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const handleSave = (andOpen = false) => {
+  const handleSave = () => {
     if (!form.businessName.trim()) { firstRef.current?.focus(); return }
-    setSaving(true)
-    const newLead = { ...form }
-    addLead(newLead)
-    if (andOpen) {
-      // Find the lead we just added (it'll be the last one) — navigate after a tick
-      setTimeout(() => {
-        // We navigate to list; lead detail needs the ID which context provides
-        navigate('/list')
-      }, 50)
-    }
+    addLead({ ...form })
     onClose()
   }
 
@@ -121,8 +107,8 @@ export default function QuickAddModal({ onClose }) {
 
         <div className="flex gap-2 mt-5">
           <button onClick={onClose} className="btn btn-ghost flex-1">Cancel</button>
-          <button onClick={() => handleSave()} className="btn btn-primary flex-1" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Lead'}
+          <button onClick={handleSave} className="btn btn-primary flex-1">
+            Save Lead
           </button>
         </div>
 

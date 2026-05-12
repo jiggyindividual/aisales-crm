@@ -31,34 +31,11 @@ class ErrorBoundary extends Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }
-  componentDidCatch(error) {
-    // ChunkLoadError = stale deployment cache — auto-reload fixes it
-    if (
-      error?.name === 'ChunkLoadError' ||
-      error?.message?.includes('Loading chunk') ||
-      error?.message?.includes('Failed to fetch dynamically imported module')
-    ) {
-      window.location.reload()
-    }
+  componentDidCatch() {
+    window.location.reload()
   }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen bg-bg gap-4 px-6 text-center">
-          <div className="text-5xl">⚠️</div>
-          <h2 className="font-syne font-bold text-white text-xl">Something went wrong</h2>
-          <p className="text-white/40 text-sm max-w-xs">
-            Your data is safe. Click below to reload the app.
-          </p>
-          <button
-            className="btn btn-primary mt-2"
-            onClick={() => window.location.reload()}
-          >
-            Reload App
-          </button>
-        </div>
-      )
-    }
+    if (this.state.hasError) return null
     return this.props.children
   }
 }

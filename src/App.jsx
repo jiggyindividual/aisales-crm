@@ -1,17 +1,67 @@
-import React, { useEffect, Suspense, lazy } from 'react'
+import React, { useEffect, Suspense, lazy, Component } from 'react'
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { CRMProvider, useCRM } from './context/CRMContext'
 import Layout from './components/Layout'
 import Toast from './components/Toast'
 
-const Dashboard   = lazy(() => import('./components/Dashboard'))
-const DailyTasks  = lazy(() => import('./components/DailyTasks'))
-const Pipeline    = lazy(() => import('./components/Pipeline'))
-const ListView    = lazy(() => import('./components/ListView'))
-const LeadDetail  = lazy(() => import('./components/LeadDetail'))
-const Reporting   = lazy(() => import('./components/Reporting'))
-const Archive     = lazy(() => import('./components/Archive'))
-const Settings    = lazy(() => import('./components/Settings'))
+// Lazy imports with chunk-error retry
+const lazyLoad = (factory) =>
+  lazy(() =>
+    factory().catch(() => {
+      window.location.reload()
+      return { default: () => null }
+    })
+  )
+
+const Dashboard   = lazyLoad(() => import('./components/Dashboard'))
+const DailyTasks  = lazyLoad(() => import('./components/DailyTasks'))
+const Pipeline    = lazyLoad(() => import('./components/Pipeline'))
+const ListView    = lazyLoad(() => import('./components/ListView'))
+const LeadDetail  = lazyLoad(() => import('./components/LeadDetail'))
+const Reporting   = lazyLoad(() => import('./components/Reporting'))
+const Archive     = lazyLoad(() => import('./components/Archive'))
+const Settings    = lazyLoad(() => import('./components/Settings'))
+
+// Error boundary — catches any render crash and shows a recovery screen
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error) {
+    // ChunkLoadError = stale deployment cache — auto-reload fixes it
+    if (
+      error?.name === 'ChunkLoadError' ||
+      error?.message?.includes('Loading chunk') ||
+      error?.message?.includes('Failed to fetch dynamically imported module')
+    ) {
+      window.location.reload()
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-bg gap-4 px-6 text-center">
+          <div className="text-5xl">⚠️</div>
+          <h2 className="font-syne font-bold text-white text-xl">Something went wrong</h2>
+          <p className="text-white/40 text-sm max-w-xs">
+            Your data is safe. Click below to reload the app.
+          </p>
+          <button
+            className="btn btn-primary mt-2"
+            onClick={() => window.location.reload()}
+          >
+            Reload App
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function SkeletonPage() {
   return (
@@ -30,7 +80,6 @@ function KeyboardShortcuts() {
 
   useEffect(() => {
     const handler = (e) => {
-      // Skip if typing in an input/textarea/select
       const tag = e.target.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) {
         if (e.key === 'Escape') { e.target.blur(); return }
@@ -81,9 +130,11 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <CRMProvider>
-        <AppShell />
-      </CRMProvider>
+      <ErrorBoundary>
+        <CRMProvider>
+          <AppShell />
+        </CRMProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }

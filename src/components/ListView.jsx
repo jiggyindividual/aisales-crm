@@ -2,22 +2,28 @@ import React, { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCRM } from '../context/CRMContext'
 import {
-  STAGES, SERVICES, INDUSTRIES, PRIORITY_COLORS,
-  computeFlags, filterByService, sortLeads, matchesSearch,
+  STAGES, SERVICES, INDUSTRIES, PRIORITY_COLORS, HEAT_LEVELS,
+  computeFlags, computeHeatScore, getHeatLevel, isNeglected,
+  filterByService, sortLeads, matchesSearch,
   formatCurrency, formatRelative, formatDate, calculateLTV,
-  isFollowUpOverdue, daysSince,
+  isFollowUpOverdue, daysSince, getDaysInStage, ACTION_TYPES,
 } from '../utils/helpers'
 import { exportLeadsToCSV } from '../utils/csvUtils'
 
 const SORT_OPTS = [
-  { value: 'businessName', label: 'Name' },
-  { value: 'stage',        label: 'Stage' },
-  { value: 'priority',     label: 'Priority' },
-  { value: 'ltv',          label: 'LTV' },
-  { value: 'dateAdded',    label: 'Date Added' },
-  { value: 'followUpDate', label: 'Follow-up' },
-  { value: 'lastContacted',label: 'Last Contact' },
-  { value: 'callAttempts', label: 'Calls' },
+  { value: 'contactPriority', label: 'Who to Call Next' },
+  { value: 'heatScore',       label: 'Heat Score' },
+  { value: 'businessName',    label: 'Name' },
+  { value: 'stage',           label: 'Stage' },
+  { value: 'priority',        label: 'Priority' },
+  { value: 'ltv',             label: 'Deal Value' },
+  { value: 'closeProbability',label: 'Close %' },
+  { value: 'nextAction',      label: 'Next Action Due' },
+  { value: 'dateAdded',       label: 'Date Added' },
+  { value: 'followUpDate',    label: 'Follow-up Date' },
+  { value: 'lastContacted',   label: 'Last Contact' },
+  { value: 'daysInStage',     label: 'Days in Stage' },
+  { value: 'callAttempts',    label: 'Call Count' },
 ]
 
 function ServiceBadge({ service }) {
@@ -64,10 +70,10 @@ export default function ListView() {
   const { leads, serviceFilter, bulkUpdate, archiveLead, changeStage, updateLead, addToast } = useCRM()
 
   const [search, setSearch]       = useState('')
-  const [sort, setSort]           = useState('dateAdded')
+  const [sort, setSort]           = useState('contactPriority')
   const [dir, setDir]             = useState('desc')
   const [selected, setSelected]   = useState(new Set())
-  const [filters, setFilters]     = useState({ stage: '', industry: '', priority: '', hasWebsite: '', stale: false, overdue: false, isNew: false, tagged: '' })
+  const [filters, setFilters]     = useState({ stage: '', industry: '', priority: '', hasWebsite: '', stale: false, overdue: false, isNew: false, tagged: '', neglected: false, noNextAction: false, heat: '' })
   const [showFilters, setShowFilters] = useState(false)
   const [bulkStage, setBulkStage] = useState('')
   const [bulkService, setBulkService] = useState('')
@@ -88,10 +94,13 @@ export default function ListView() {
     if (filters.industry)  list = list.filter(l => l.industry === filters.industry)
     if (filters.priority)  list = list.filter(l => l.priority === filters.priority)
     if (filters.hasWebsite) list = list.filter(l => filters.hasWebsite === 'yes' ? l.hasWebsite : !l.hasWebsite)
-    if (filters.stale)    list = list.filter(l => { const d = daysSince(l.lastContacted); return d !== null && d >= 7 })
-    if (filters.overdue)  list = list.filter(l => l.followUpDate && isFollowUpOverdue(l.followUpDate))
-    if (filters.isNew)    list = list.filter(l => daysSince(l.dateAdded) === 0)
-    if (filters.tagged)   list = list.filter(l => l.tags?.includes(filters.tagged))
+    if (filters.stale)        list = list.filter(l => { const d = daysSince(l.lastContacted); return d !== null && d >= 7 })
+    if (filters.overdue)      list = list.filter(l => l.followUpDate && isFollowUpOverdue(l.followUpDate))
+    if (filters.isNew)        list = list.filter(l => daysSince(l.dateAdded) === 0)
+    if (filters.tagged)       list = list.filter(l => l.tags?.includes(filters.tagged))
+    if (filters.neglected)    list = list.filter(l => isNeglected(l))
+    if (filters.noNextAction) list = list.filter(l => !l.nextActionType)
+    if (filters.heat)         list = list.filter(l => getHeatLevel(computeHeatScore(l)) === filters.heat)
 
     const sorted = sortLeads(list, sort, dir)
     // Pinned always first
@@ -144,7 +153,7 @@ export default function ListView() {
     }
   }
 
-  const activeFilterCount = Object.entries(filters).filter(([k,v]) => v && v !== '').length
+  const activeFilterCount = Object.entries(filters).filter(([k,v]) => v && v !== '' && v !== false).length
 
   return (
     <div className="flex flex-col h-full">
@@ -209,10 +218,16 @@ export default function ListView() {
               <option value="yes">Has Website</option>
               <option value="no">No Website</option>
             </select>
+            <select className="input w-auto text-xs py-1" value={filters.heat} onChange={e => setFilter('heat', e.target.value)}>
+              <option value="">All Heat Levels</option>
+              {['Nuclear','Hot','Warm','Cold'].map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
             {[
-              { key: 'stale',   label: '⚠ Stale' },
-              { key: 'overdue', label: '🔴 Overdue' },
-              { key: 'isNew',   label: '✨ New' },
+              { key: 'stale',        label: '⚠ Stale' },
+              { key: 'overdue',      label: '🔴 Overdue' },
+              { key: 'neglected',    label: '💸 Neglected' },
+              { key: 'noNextAction', label: '⚡ No Action' },
+              { key: 'isNew',        label: '✨ New' },
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -222,7 +237,7 @@ export default function ListView() {
                 {label}
               </button>
             ))}
-            <button onClick={() => setFilters({ stage:'',industry:'',priority:'',hasWebsite:'',stale:false,overdue:false,isNew:false,tagged:'' })}
+            <button onClick={() => setFilters({ stage:'',industry:'',priority:'',hasWebsite:'',stale:false,overdue:false,isNew:false,tagged:'',neglected:false,noNextAction:false,heat:'' })}
               className="btn btn-ghost btn-sm text-white/40">
               Clear
             </button>
@@ -272,31 +287,34 @@ export default function ListView() {
                 </th>
                 <th className="px-2 py-3 w-4" />
                 <SortTh col="businessName">Business</SortTh>
-                <th className="px-3 py-3 text-left text-[10px] text-white/40 font-semibold uppercase tracking-wide">Service</th>
+                <SortTh col="heatScore">Heat</SortTh>
                 <SortTh col="stage">Stage</SortTh>
-                <SortTh col="priority">Priority</SortTh>
-                <SortTh col="ltv">LTV</SortTh>
-                <SortTh col="followUpDate">Follow-up</SortTh>
+                <SortTh col="ltv">Deal Value</SortTh>
+                <SortTh col="closeProbability">Close %</SortTh>
+                <th className="px-3 py-3 text-left text-[10px] text-white/40 font-semibold uppercase tracking-wide">Next Action</th>
                 <SortTh col="lastContacted">Last Contact</SortTh>
-                <SortTh col="callAttempts">Calls</SortTh>
+                <SortTh col="daysInStage">In Stage</SortTh>
                 <th className="px-3 py-3 text-left text-[10px] text-white/40 font-semibold uppercase tracking-wide">Flags</th>
-                <th className="px-3 py-3 w-20" />
+                <th className="px-3 py-3 w-16" />
               </tr>
             </thead>
             <tbody>
               {rows.map((lead, i) => {
-                const flags = computeFlags(lead, {})
-                const svc = SERVICES[lead.service]
-                const ltv = calculateLTV(lead.monthlyFee, lead.setupFee)
-                const stage = STAGES.find(s => s.id === lead.stage)
+                const flags      = computeFlags(lead, {})
+                const ltv        = calculateLTV(lead.monthlyFee, lead.setupFee)
+                const stage      = STAGES.find(s => s.id === lead.stage)
+                const heatScore  = computeHeatScore(lead)
+                const heatLevel  = getHeatLevel(heatScore)
+                const hl         = HEAT_LEVELS[heatLevel]
                 const isSelected = selected.has(lead.id)
+                const actionType = ACTION_TYPES.find(a => a.id === lead.nextActionType)
+                const actionOverdue = lead.nextActionDueAt && daysSince(lead.nextActionDueAt) > 0
+                const daysInStage = getDaysInStage(lead)
 
                 return (
                   <tr
                     key={lead.id}
-                    className={`border-b border-white/[0.03] cursor-pointer transition-colors card-enter hover:bg-white/[0.03] ${
-                      isSelected ? 'bg-white/[0.05]' : ''
-                    }`}
+                    className={`border-b border-white/[0.03] cursor-pointer transition-colors card-enter hover:bg-white/[0.03] ${isSelected ? 'bg-white/[0.05]' : ''}`}
                     style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}
                     onClick={() => navigate(`/leads/${lead.id}`)}
                   >
@@ -304,7 +322,7 @@ export default function ListView() {
                       <input type="checkbox" checked={isSelected} readOnly className="rounded pointer-events-none" />
                     </td>
 
-                    {/* Pin star */}
+                    {/* Pin */}
                     <td className="px-2 py-3">
                       {lead.pinned && <span className="text-[#FFD700] text-xs">★</span>}
                     </td>
@@ -317,60 +335,40 @@ export default function ListView() {
                       </div>
                     </td>
 
-                    {/* Service */}
-                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                      <select
-                        className="input text-xs py-1"
-                        style={{ minWidth: 130 }}
-                        value={lead.service}
-                        onChange={e => updateLead(lead.id, { service: e.target.value })}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {Object.entries(SERVICES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-                      </select>
+                    {/* Heat */}
+                    <td className="px-3 py-3">
+                      <span className="badge text-[10px] font-bold whitespace-nowrap" style={{ background: hl.bg, color: hl.color }}>
+                        {hl.emoji} {hl.label}
+                      </span>
                     </td>
 
-                    {/* Stage */}
+                    {/* Stage (inline select) */}
                     <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                      <select
-                        className="input text-xs py-1"
-                        style={{ minWidth: 140 }}
-                        value={lead.stage}
-                        onChange={e => changeStage(lead.id, e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                      >
+                      <select className="input text-xs py-1" style={{ minWidth: 130 }} value={lead.stage}
+                        onChange={e => changeStage(lead.id, e.target.value)} onClick={e => e.stopPropagation()}>
                         {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
                     </td>
 
-                    {/* Priority */}
-                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                      <select
-                        className="input text-xs py-1"
-                        style={{ minWidth: 80 }}
-                        value={lead.priority}
-                        onChange={e => updateLead(lead.id, { priority: e.target.value })}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {['Hot','Warm','Cold'].map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
+                    {/* Deal value */}
+                    <td className="px-3 py-3 text-sm whitespace-nowrap" style={{ color: ltv > 0 ? '#00FF88' : undefined }}>
+                      {ltv > 0 ? formatCurrency(ltv) : <span className="text-white/20">—</span>}
                     </td>
 
-                    {/* LTV */}
-                    <td className="px-3 py-3 text-sm text-white/60 whitespace-nowrap">
-                      {ltv > 0 ? formatCurrency(ltv) : '—'}
+                    {/* Close % */}
+                    <td className="px-3 py-3 text-xs text-white/50 whitespace-nowrap">
+                      {lead.closeProbability != null ? `${lead.closeProbability}%` : '25%'}
                     </td>
 
-                    {/* Follow-up */}
-                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="date"
-                        className="input text-xs py-1"
-                        style={{ minWidth: 120 }}
-                        value={lead.followUpDate || ''}
-                        onChange={e => updateLead(lead.id, { followUpDate: e.target.value })}
-                        onClick={e => e.stopPropagation()}
-                      />
+                    {/* Next action */}
+                    <td className="px-3 py-3">
+                      {actionType ? (
+                        <span className={`text-xs font-medium whitespace-nowrap ${actionOverdue ? 'text-[#FF3B3B]' : 'text-white/50'}`}>
+                          {actionType.icon} {actionType.label}{actionOverdue ? ' ⚡' : ''}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#FF9500]/60">⚠ Not set</span>
+                      )}
                     </td>
 
                     {/* Last contact */}
@@ -378,9 +376,9 @@ export default function ListView() {
                       {formatRelative(lead.lastContacted)}
                     </td>
 
-                    {/* Call count */}
-                    <td className="px-3 py-3 text-xs text-white/40 text-center">
-                      {lead.callAttemptCount || 0}
+                    {/* Days in stage */}
+                    <td className="px-3 py-3 text-xs text-white/40 whitespace-nowrap">
+                      {daysInStage}d
                     </td>
 
                     {/* Flags */}
@@ -390,22 +388,9 @@ export default function ListView() {
 
                     {/* Quick actions */}
                     <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => updateLead(lead.id, { called: !lead.called })}
-                          title="Toggle called"
-                          className={`btn btn-xs ${lead.called ? 'bg-[#00FF88]/20 text-[#00FF88]' : 'btn-ghost'}`}
-                        >
-                          📞
-                        </button>
-                        <button
-                          onClick={() => archiveLead(lead.id)}
-                          title="Archive"
-                          className="btn btn-xs btn-ghost text-white/30 hover:text-white/60"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M1 4h10M4 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><path d="M2 4V3a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.2"/></svg>
-                        </button>
-                      </div>
+                      <button onClick={() => archiveLead(lead.id)} title="Archive" className="btn btn-xs btn-ghost text-white/30 hover:text-white/60">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="4" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M1 4h10M4 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><path d="M2 4V3a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.2"/></svg>
+                      </button>
                     </td>
                   </tr>
                 )

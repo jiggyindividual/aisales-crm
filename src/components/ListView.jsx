@@ -129,6 +129,8 @@ const SORT_OPTS = [
   { value: 'ltv',             label: 'Deal Value' },
   { value: 'businessName',    label: 'Name A–Z' },
   { value: 'callAttempts',    label: 'Most Calls' },
+  { value: 'ratings',         label: 'Ratings' },
+  { value: 'reviews',         label: 'Reviews' },
 ]
 
 export default function ListView() {
@@ -307,26 +309,31 @@ export default function ListView() {
             <p className="text-white/30 text-sm">Adjust filters or add your first lead</p>
           </div>
         ) : (
-          <table className="w-full" style={{ minWidth: 1420 }}>
+          <table className="w-full" style={{ minWidth: 1600 }}>
             <thead className="sticky top-0 z-20 bg-[#0a0a0a] border-b border-white/[0.06]">
               <tr>
                 <th className="px-3 py-2.5 w-8">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded" />
                 </th>
-                {/* Sticky business name header */}
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 sticky left-0 bg-[#0a0a0a] z-10 min-w-[180px]">Business</th>
+                {/* Sticky business name — sortable */}
+                <SortTh col="businessName" sort={sort} dir={dir} setSort={setSort} setDir={setDir}
+                  className="sticky left-0 bg-[#0a0a0a] z-10 min-w-[180px]">Business</SortTh>
+                {/* Static non-sortable */}
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[110px]">Phone</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[150px]">Email</th>
-                <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[140px]">Stage</th>
+                {/* Sortable */}
+                <SortTh col="stage" sort={sort} dir={dir} setSort={setSort} setDir={setDir} className="min-w-[140px]">Stage</SortTh>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[120px]">Not Int. Reason</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[90px]">Their Site</th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-white/40 w-12">Maps</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[120px]">Our Website</th>
-                <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[90px]">Last Contact</th>
+                <SortTh col="lastContacted" sort={sort} dir={dir} setSort={setSort} setDir={setDir} className="min-w-[90px]">Last Contact</SortTh>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[95px]">Urgency</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[160px]">Notes</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[130px]">Next Step</th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-white/40 w-12">Calls</th>
+                <SortTh col="ratings" sort={sort} dir={dir} setSort={setSort} setDir={setDir} className="min-w-[70px] text-center">Ratings</SortTh>
+                <SortTh col="reviews" sort={sort} dir={dir} setSort={setSort} setDir={setDir} className="min-w-[70px] text-center">Reviews</SortTh>
+                <SortTh col="callAttempts" sort={sort} dir={dir} setSort={setSort} setDir={setDir} className="w-14 text-center">Calls</SortTh>
                 <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/40 min-w-[140px]">Quick Log</th>
               </tr>
             </thead>
@@ -533,6 +540,34 @@ export default function ListView() {
                       onCancel={() => setEditCell(null)}
                     />
 
+                    {/* Ratings — inline numeric edit */}
+                    <EditTextCell
+                      value={lead.ratings ? `⭐ ${lead.ratings}` : ''}
+                      placeholder="0.0"
+                      cellKey={`${lead.id}:ratings`}
+                      editCell={editCell}
+                      editValue={editValue}
+                      onStartEdit={(e) => startEdit(lead.id, 'ratings', lead.ratings, e)}
+                      onEditChange={setEditValue}
+                      onCommit={() => commitEdit(lead.id, 'ratings')}
+                      onCancel={() => setEditCell(null)}
+                      center
+                    />
+
+                    {/* Reviews — inline numeric edit */}
+                    <EditTextCell
+                      value={lead.reviews ? lead.reviews.toLocaleString?.() ?? lead.reviews : ''}
+                      placeholder="0"
+                      cellKey={`${lead.id}:reviews`}
+                      editCell={editCell}
+                      editValue={editValue}
+                      onStartEdit={(e) => startEdit(lead.id, 'reviews', lead.reviews, e)}
+                      onEditChange={setEditValue}
+                      onCommit={() => commitEdit(lead.id, 'reviews')}
+                      onCancel={() => setEditCell(null)}
+                      center
+                    />
+
                     {/* Call count */}
                     <td className="px-3 py-2.5 text-center">
                       <span className="text-[11px] text-white/45 font-mono">{lead.callAttemptCount || 0}</span>
@@ -553,8 +588,30 @@ export default function ListView() {
   )
 }
 
+// ── Sortable column header ────────────────────────────────────────────────────
+function SortTh({ col, sort, dir, setSort, setDir, children, className = '' }) {
+  const active = sort === col
+  const handleClick = () => {
+    if (active) setDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSort(col); setDir('desc') }
+  }
+  return (
+    <th
+      onClick={handleClick}
+      className={`px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors ${active ? 'text-white/80' : 'text-white/40 hover:text-white/65'} ${className}`}
+    >
+      {children}
+      <span className="ml-1 inline-block">
+        {active
+          ? <span className="text-[#0088FF]">{dir === 'asc' ? '↑' : '↓'}</span>
+          : <span className="text-white/20">⇅</span>}
+      </span>
+    </th>
+  )
+}
+
 // ── Editable text cell component ─────────────────────────────────────────────
-function EditTextCell({ value, placeholder, cellKey, editCell, editValue, onStartEdit, onEditChange, onCommit, onCancel, multiline }) {
+function EditTextCell({ value, placeholder, cellKey, editCell, editValue, onStartEdit, onEditChange, onCommit, onCancel, multiline, center }) {
   const isEditing = editCell === cellKey
   const inputRef  = useRef(null)
 
@@ -562,25 +619,18 @@ function EditTextCell({ value, placeholder, cellKey, editCell, editValue, onStar
 
   if (isEditing) {
     return (
-      <td className="px-3 py-1.5 min-w-[120px]" onClick={e => e.stopPropagation()}>
+      <td className={`px-3 py-1.5 min-w-[60px]`} onClick={e => e.stopPropagation()}>
         {multiline ? (
-          <textarea
-            ref={inputRef}
-            rows={2}
-            value={editValue}
-            onChange={e => onEditChange(e.target.value)}
-            onBlur={onCommit}
+          <textarea ref={inputRef} rows={2} value={editValue}
+            onChange={e => onEditChange(e.target.value)} onBlur={onCommit}
             onKeyDown={e => { if (e.key === 'Escape') onCancel() }}
             className="w-full bg-white/[0.06] border border-white/20 rounded-md text-xs text-white px-2 py-1 outline-none resize-none"
           />
         ) : (
-          <input
-            ref={inputRef}
-            value={editValue}
-            onChange={e => onEditChange(e.target.value)}
-            onBlur={onCommit}
+          <input ref={inputRef} value={editValue}
+            onChange={e => onEditChange(e.target.value)} onBlur={onCommit}
             onKeyDown={e => { if (e.key === 'Enter') onCommit(); if (e.key === 'Escape') onCancel() }}
-            className="w-full bg-white/[0.06] border border-white/20 rounded-md text-xs text-white px-2 py-1.5 outline-none"
+            className={`w-full bg-white/[0.06] border border-white/20 rounded-md text-xs text-white px-2 py-1.5 outline-none ${center ? 'text-center' : ''}`}
           />
         )}
       </td>
@@ -589,7 +639,7 @@ function EditTextCell({ value, placeholder, cellKey, editCell, editValue, onStar
 
   return (
     <td
-      className="px-3 py-2.5 cursor-text hover:bg-white/[0.03] transition-colors group/cell min-w-[120px]"
+      className={`px-3 py-2.5 cursor-text hover:bg-white/[0.03] transition-colors group/cell min-w-[60px] ${center ? 'text-center' : ''}`}
       onClick={onStartEdit}
     >
       {value ? (

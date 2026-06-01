@@ -417,6 +417,8 @@ export const createDefaultLead = (overrides = {}) => ({
   nextActionStatus:  'pending',
   followUpSequence:  'none',
   proposalSentAt:    '',
+  ratings:             '',   // their star rating e.g. 4.5
+  reviews:             '',   // their review count e.g. 127
   notInterestedReason: '',
   winLossReason:     '',
   priority:          'Cold',
@@ -452,6 +454,8 @@ export const sortLeads = (leads, sort, dir) => {
       case 'lastContacted':    va = a.lastContacted||''; vb = b.lastContacted||''; break
       case 'callAttempts':     va = a.callAttemptCount||0; vb = b.callAttemptCount||0; break
       case 'closeProbability': va = a.closeProbability||0; vb = b.closeProbability||0; break
+      case 'ratings':          va = parseFloat(a.ratings)||0; vb = parseFloat(b.ratings)||0; break
+      case 'reviews':          va = parseInt(a.reviews)||0;   vb = parseInt(b.reviews)||0;   break
       case 'heatScore':        va = computeHeatScore(a); vb = computeHeatScore(b); break
       case 'daysInStage':      va = getDaysInStage(a); vb = getDaysInStage(b); break
       case 'nextAction':       va = a.nextActionDueAt||'zzz'; vb = b.nextActionDueAt||'zzz'; break

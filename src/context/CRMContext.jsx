@@ -5,7 +5,7 @@ const CRMContext = createContext(null)
 
 const STORAGE_KEY = 'park-crm-v1'
 
-const defaultSettings = { monthlyGoal: 0, staleThreshold: 7, coldThreshold: 5 }
+const defaultSettings = { monthlyGoal: 0, staleThreshold: 7, coldThreshold: 5, dailyTarget: 20, projectionRate: 30 }
 const defaultOnboarding = { addedFirstLead: false, importedCSV: false, setRevenueGoal: false, dismissed: false }
 
 const load = () => {
@@ -148,6 +148,39 @@ function reducer(state, action) {
       return { ...state, toasts: state.toasts.filter(t => t.id !== action.id) }
     case 'SET_MODAL':
       return { ...state, activeModal: action.modal }
+    case 'QUICK_LOG': {
+      const { leadId, entry, logType } = action
+      next = {
+        ...state,
+        leads: state.leads.map(l => {
+          if (l.id !== leadId) return l
+          const isCall = logType === 'called' || logType === 'no-answer'
+          const updated = {
+            ...l,
+            activities: [...(l.activities || []), entry],
+            lastContacted: entry.date,
+            callAttemptCount: isCall ? (l.callAttemptCount || 0) + 1 : (l.callAttemptCount || 0),
+          }
+          if (logType === 'not-interested') {
+            updated.stage = 'do-not-call'
+            updated.stageHistory = [...(l.stageHistory || []), {
+              stage: 'do-not-call', timestamp: entry.date, note: 'Quick log: Not Interested',
+            }]
+          }
+          return updated
+        }),
+      }
+      break
+    }
+    case 'SET_WIN_LOSS_REASON': {
+      next = {
+        ...state,
+        leads: state.leads.map(l =>
+          l.id === action.leadId ? { ...l, winLossReason: action.reason } : l
+        ),
+      }
+      break
+    }
     case 'CLEAR_ALL':
       next = { ...state, leads: [], onboarding: defaultOnboarding }
       break
@@ -257,6 +290,23 @@ export function CRMProvider({ children }) {
 
   const addToast = useCallback((message, type, undo) => toast(message, type, undo), [])
 
+  const quickLog = useCallback((leadId, logType) => {
+    const outcomeMap = {
+      'called':         'Answered',
+      'no-answer':      'No Answer',
+      'callback':       'Callback',
+      'not-interested': 'Not Interested',
+    }
+    const entry = { id: generateId(), type: 'call', outcome: outcomeMap[logType], date: new Date().toISOString(), notes: '' }
+    dispatch({ type: 'QUICK_LOG', leadId, entry, logType })
+    const labels = { 'called': '📞 Logged', 'no-answer': '📵 No answer logged', 'callback': '🔁 Callback logged', 'not-interested': '🚫 Marked not interested' }
+    toast(labels[logType] || 'Logged', 'success')
+  }, [])
+
+  const setWinLossReason = useCallback((leadId, reason) => {
+    dispatch({ type: 'SET_WIN_LOSS_REASON', leadId, reason })
+  }, [])
+
   const value = {
     ...state,
     addLead, updateLead, changeStage, logActivity,
@@ -265,6 +315,7 @@ export function CRMProvider({ children }) {
     updateSettings, setServiceFilter,
     dismissOnboarding, openModal, closeModal,
     clearAll, addToast, removeToast,
+    quickLog, setWinLossReason,
   }
 
   return <CRMContext.Provider value={value}>{children}</CRMContext.Provider>

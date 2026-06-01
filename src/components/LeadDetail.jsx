@@ -4,6 +4,7 @@ import { useCRM } from '../context/CRMContext'
 import {
   STAGES, SERVICES, INDUSTRIES, LEAD_SOURCES, PRIORITIES, PRIORITY_COLORS,
   CALL_OUTCOMES, ACTION_TYPES, ACTIVITY_TYPES, FOLLOW_UP_SEQUENCES, HEAT_LEVELS,
+  OUR_WEBSITE_OPTIONS, NOT_INTERESTED_REASONS, WIN_REASONS, LOSS_REASONS,
   computeFlags, computeHeatScore, getHeatLevel, getAISuggestion, getDaysInStage,
   calculateLTV, formatCurrency, formatDate, formatRelative, formatTime, daysSince, getStage,
 } from '../utils/helpers'
@@ -190,7 +191,7 @@ function StageHistory({ history }) {
 export default function LeadDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { leads, updateLead, changeStage, logActivity, archiveLead, addToast } = useCRM()
+  const { leads, updateLead, changeStage, logActivity, archiveLead, addToast, quickLog, setWinLossReason } = useCRM()
 
   const lead = leads.find(l => l.id === id)
   const [form, setForm] = useState(null)
@@ -288,6 +289,25 @@ export default function LeadDetail() {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        {/* ── One-tap quick log bar ── */}
+        <div className="glass rounded-2xl p-3">
+          <p className="text-[10px] text-white/30 font-semibold uppercase tracking-wider mb-2">Quick Log</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { type: 'called',         icon: '📞', label: 'Called' },
+              { type: 'no-answer',      icon: '📵', label: 'No Answer' },
+              { type: 'callback',       icon: '🔁', label: 'Callback' },
+              { type: 'not-interested', icon: '🚫', label: 'Not Interested' },
+            ].map(b => (
+              <button key={b.type} onClick={() => quickLog(lead.id, b.type)}
+                className="flex flex-col items-center gap-1 py-2.5 rounded-xl border border-white/[0.07] hover:bg-white/[0.06] hover:border-white/20 transition-all">
+                <span className="text-xl">{b.icon}</span>
+                <span className="text-[10px] text-white/50">{b.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ── AI Suggestion banner ── */}
         {suggestion && (
           <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 border" style={{ background: 'rgba(0,136,255,0.06)', borderColor: 'rgba(0,136,255,0.2)' }}>
@@ -511,8 +531,14 @@ export default function LeadDetail() {
                 <Field label="Email">
                   <input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} />
                 </Field>
-                <Field label="Website">
-                  <input className="input" placeholder="https://…" value={form.website || ''} onChange={e => set('website', e.target.value)} />
+                <Field label="Their Website">
+                  <div className="flex gap-2">
+                    <input className="input flex-1" placeholder="https://…" value={form.currentWebsite || form.website || ''} onChange={e => set('currentWebsite', e.target.value)} />
+                    {(form.currentWebsite || form.website) && (
+                      <a href={(form.currentWebsite || form.website).startsWith('http') ? (form.currentWebsite || form.website) : `https://${form.currentWebsite || form.website}`}
+                        target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm flex-shrink-0">🔗</a>
+                    )}
+                  </div>
                 </Field>
                 <Field label="Industry">
                   <select className="input" value={form.industry} onChange={e => set('industry', e.target.value)}>
@@ -575,7 +601,66 @@ export default function LeadDetail() {
                     ))}
                   </div>
                 </Field>
+                </div>
+            </div>
+
+            {/* Our website + next step */}
+            <div className="glass rounded-2xl p-5 space-y-4">
+              <h3 className="font-syne font-semibold text-white text-sm">Service Delivery</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Field label="Our Website Status">
+                  <div className="flex flex-wrap gap-1.5">
+                    {OUR_WEBSITE_OPTIONS.map(o => (
+                      <button key={o.id} onClick={() => set('ourWebsite', o.id)}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                          (form.ourWebsite || 'none') === o.id ? 'border-transparent' : 'border-white/[0.08] text-white/40 hover:border-white/20'
+                        }`}
+                        style={(form.ourWebsite || 'none') === o.id ? { background: o.color + '30', color: o.color, borderColor: o.color + '50' } : {}}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="Next Step">
+                  <input className="input" placeholder="e.g. Send follow-up email…" value={form.nextStep || ''} onChange={e => set('nextStep', e.target.value)} />
+                </Field>
               </div>
+              {/* Not Interested reason */}
+              {form.stage === 'do-not-call' && (
+                <Field label="Not Interested — Reason">
+                  <div className="flex flex-wrap gap-1.5">
+                    {NOT_INTERESTED_REASONS.map(r => (
+                      <button key={r.id} onClick={() => set('notInterestedReason', r.id)}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                          form.notInterestedReason === r.id ? 'bg-white/10 text-white border-white/20' : 'border-white/[0.08] text-white/40 hover:border-white/20'
+                        }`}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
+              {/* Win/Loss reason */}
+              {(form.stage === 'closed-won' || form.stage === 'closed-lost') && (
+                <Field label={form.stage === 'closed-won' ? 'Why You Won' : 'Why You Lost'}>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(form.stage === 'closed-won' ? WIN_REASONS : LOSS_REASONS).map(r => (
+                      <button key={r.id}
+                        onClick={() => { set('winLossReason', r.id); setWinLossReason(lead.id, r.id) }}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                          form.winLossReason === r.id ? 'border-transparent' : 'border-white/[0.08] text-white/40 hover:border-white/20'
+                        }`}
+                        style={form.winLossReason === r.id ? {
+                          background: (form.stage === 'closed-won' ? '#00FF88' : '#EF4444') + '25',
+                          color: form.stage === 'closed-won' ? '#00FF88' : '#EF4444',
+                          borderColor: (form.stage === 'closed-won' ? '#00FF88' : '#EF4444') + '50',
+                        } : {}}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
             </div>
 
             {/* Notes */}

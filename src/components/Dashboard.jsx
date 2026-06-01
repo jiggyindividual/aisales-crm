@@ -8,9 +8,11 @@ import {
   computeContactPriority, getAISuggestion, getNeglectReason, isNeglected,
   calculateLTV, filterByService,
   isFollowUpToday, isFollowUpOverdue, daysSince,
-  getMonthlyClosedRevenue, getTotalMRR, getWeightedPipelineValue, getActiveMRRPotential,
-  getDaysInStage, ACTIVE_STAGE_IDS,
+  getMonthlyClosedRevenue, getTotalMRR, getWeightedPipelineValue,
+  getActivePipelineMRR, getDaysInStage, ACTIVE_STAGE_IDS,
+  getCallAnalytics, WIN_REASONS, LOSS_REASONS,
 } from '../utils/helpers'
+import TodaysHits from './TodaysHits'
 
 // ── Shared sub-components ──
 
@@ -169,14 +171,15 @@ export default function Dashboard() {
   const allActive = useMemo(() => leads.filter(l => !l.archived), [leads])
   const filtered  = useMemo(() => filterByService(allActive, serviceFilter), [allActive, serviceFilter])
 
-  const closedWon = useMemo(() => filtered.filter(l => l.stage === 'closed-won'), [filtered])
-  const active    = useMemo(() => filtered.filter(l => ACTIVE_STAGE_IDS.includes(l.stage)), [filtered])
+  const closedWon   = useMemo(() => filtered.filter(l => l.stage === 'closed-won'), [filtered])
+  const active      = useMemo(() => filtered.filter(l => ACTIVE_STAGE_IDS.includes(l.stage)), [filtered])
+  const callStats   = useMemo(() => getCallAnalytics(allActive), [allActive])
 
   // ── Revenue ──
   const monthMRR       = useMemo(() => getMonthlyClosedRevenue(filtered), [filtered])
   const totalMRR       = useMemo(() => getTotalMRR(filtered), [filtered])
   const weightedPipeline = useMemo(() => getWeightedPipelineValue(filtered), [filtered])
-  const activeMRRPot   = useMemo(() => getActiveMRRPotential(filtered), [filtered])
+  const activeMRRPot   = useMemo(() => getActivePipelineMRR(filtered), [filtered])
   const pipelineVal    = useMemo(() => active.reduce((s,l) => s + calculateLTV(l.monthlyFee, l.setupFee), 0), [active])
   const goalPct        = settings.monthlyGoal > 0 ? Math.min(100, Math.round((monthMRR / settings.monthlyGoal) * 100)) : 0
   const avgDealSize    = active.length > 0 ? Math.round(pipelineVal / active.length) : 0
@@ -267,6 +270,42 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Today's Hits ── */}
+      <TodaysHits />
+
+      {/* ── Call Analytics ── */}
+      <div>
+        <p className="text-[11px] text-white/30 font-semibold uppercase tracking-wider mb-3">Call Performance</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Total Calls Dialed</p>
+            <p className="font-syne font-bold text-2xl text-white">{callStats.totalCalls}</p>
+            <p className="text-[11px] text-white/30 mt-1">{callStats.answered} answered</p>
+          </div>
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Answer Rate</p>
+            <p className="font-syne font-bold text-2xl" style={{ color: callStats.answerRate >= 30 ? '#00FF88' : callStats.answerRate >= 15 ? '#F59E0B' : '#EF4444' }}>
+              {callStats.answerRate}%
+            </p>
+            <p className="text-[11px] text-white/30 mt-1">answered ÷ dialed</p>
+          </div>
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Close Rate</p>
+            <p className="font-syne font-bold text-2xl" style={{ color: callStats.closeRate >= 10 ? '#00FF88' : '#F59E0B' }}>
+              {callStats.closeRate}%
+            </p>
+            <p className="text-[11px] text-white/30 mt-1">{callStats.closedWon} won</p>
+          </div>
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Meetings Booked</p>
+            <p className="font-syne font-bold text-2xl text-white">
+              {allActive.filter(l => l.stage === 'contacted-interested' || l.stage === 'demo-sent').length}
+            </p>
+            <p className="text-[11px] text-white/30 mt-1">booked or held</p>
+          </div>
+        </div>
+      </div>
 
       {/* ── Today's Action Stats ── */}
       <div>

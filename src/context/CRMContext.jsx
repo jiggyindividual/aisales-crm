@@ -16,7 +16,8 @@ const load = () => {
       return {
         leads: parsed.leads || [],
         settings: { ...defaultSettings, ...(parsed.settings || {}) },
-        serviceFilter: parsed.serviceFilter || 'all',
+        serviceFilter: 'all',
+        industryFilter: parsed.industryFilter || 'all',
         onboarding: { ...defaultOnboarding, ...(parsed.onboarding || {}) },
         toasts: [],
         activeModal: null,
@@ -27,6 +28,7 @@ const load = () => {
     leads: [],
     settings: defaultSettings,
     serviceFilter: 'all',
+    industryFilter: 'all',
     onboarding: defaultOnboarding,
     toasts: [],
     activeModal: null,
@@ -132,6 +134,9 @@ function reducer(state, action) {
       break
     case 'SET_SERVICE_FILTER':
       next = { ...state, serviceFilter: action.filter }
+      break
+    case 'SET_INDUSTRY_FILTER':
+      next = { ...state, industryFilter: action.filter }
       break
     case 'COMPLETE_ONBOARDING':
       next = { ...state, onboarding: { ...state.onboarding, [action.step]: true } }
@@ -253,9 +258,13 @@ export function CRMProvider({ children }) {
     }
   }, [])
 
-  /* ── Filter ── */
+  /* ── Filters ── */
   const setServiceFilter = useCallback((filter) => {
     dispatch({ type: 'SET_SERVICE_FILTER', filter })
+  }, [])
+
+  const setIndustryFilter = useCallback((filter) => {
+    dispatch({ type: 'SET_INDUSTRY_FILTER', filter })
   }, [])
 
   /* ── Onboarding ── */
@@ -312,7 +321,7 @@ export function CRMProvider({ children }) {
     addLead, updateLead, changeStage, logActivity,
     archiveLead, restoreLead, deleteLead,
     bulkUpdate, importLeads,
-    updateSettings, setServiceFilter,
+    updateSettings, setServiceFilter, setIndustryFilter,
     dismissOnboarding, openModal, closeModal,
     clearAll, addToast, removeToast,
     quickLog, setWinLossReason,

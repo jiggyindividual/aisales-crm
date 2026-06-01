@@ -35,8 +35,29 @@ export const SERVICES = {
 }
 
 export const INDUSTRIES = [
-  'Restaurant','Salon','Auto Shop','Contractor','Retail','Medical','Barbershop','Other',
+  'Auto Detailing',
+  'Mobile Car Wash',
+  'Auto Shop',
+  'Barbershop',
+  'Salon / Spa',
+  'Restaurant',
+  'Food Truck',
+  'Contractor',
+  'Landscaping',
+  'Cleaning Services',
+  'Plumbing / HVAC',
+  'Real Estate',
+  'Gym / Fitness',
+  'Photography',
+  'Retail',
+  'Medical',
+  'Other',
 ]
+
+export const filterByIndustry = (leads, filter) => {
+  if (!filter || filter === 'all') return leads
+  return leads.filter(l => l.industry === filter)
+}
 
 export const LEAD_SOURCES = ['Cold Call','Referral','Instagram','Walk-in','Other']
 

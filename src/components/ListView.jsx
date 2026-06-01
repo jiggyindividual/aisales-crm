@@ -5,7 +5,7 @@ import {
   STAGES, SERVICES, INDUSTRIES, OUR_WEBSITE_OPTIONS, NOT_INTERESTED_REASONS,
   WIN_REASONS, LOSS_REASONS, HEAT_LEVELS,
   computeFlags, computeHeatScore, getHeatLevel, computeUrgency, isNeglected,
-  filterByService, sortLeads, matchesSearch,
+  filterByIndustry, sortLeads, matchesSearch,
   formatCurrency, formatRelative, calculateLTV, daysSince,
   isFollowUpOverdue,
 } from '../utils/helpers'
@@ -135,7 +135,7 @@ const SORT_OPTS = [
 
 export default function ListView() {
   const navigate = useNavigate()
-  const { leads, serviceFilter, bulkUpdate, archiveLead, changeStage, updateLead, quickLog, setWinLossReason, openModal } = useCRM()
+  const { leads, industryFilter, bulkUpdate, archiveLead, changeStage, updateLead, quickLog, setWinLossReason, openModal } = useCRM()
 
   // ── Inline editing state
   const [editCell, setEditCell]     = useState(null)   // 'leadId:field'
@@ -161,7 +161,7 @@ export default function ListView() {
 
   // ── Computed rows
   const rows = useMemo(() => {
-    let list = filterByService(leads.filter(l => !l.archived), serviceFilter)
+    let list = filterByIndustry(leads.filter(l => !l.archived), industryFilter)
     list = list.filter(l => matchesSearch(l, search))
     if (filters.stage)        list = list.filter(l => l.stage === filters.stage)
     if (filters.priority)     list = list.filter(l => l.priority === filters.priority)
@@ -175,7 +175,7 @@ export default function ListView() {
     }
     const sorted = sortLeads(list, sort, dir)
     return [...sorted.filter(l => l.pinned), ...sorted.filter(l => !l.pinned)]
-  }, [leads, serviceFilter, search, filters, sort, dir])
+  }, [leads, industryFilter, search, filters, sort, dir])
 
   const allSelected = rows.length > 0 && rows.every(r => selected.has(r.id))
   const toggleAll   = () => setSelected(allSelected ? new Set() : new Set(rows.map(r => r.id)))

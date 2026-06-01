@@ -4,7 +4,7 @@ import { useCRM } from '../context/CRMContext'
 import QuickAddModal from './QuickAddModal'
 import CSVImportModal from './CSVImportModal'
 import Onboarding from './Onboarding'
-import { SERVICES } from '../utils/helpers'
+import { INDUSTRIES } from '../utils/helpers'
 
 const NAV_ITEMS = [
   { to: '/',          icon: GridIcon,    label: 'Dashboard' },
@@ -25,11 +25,10 @@ function ArchiveIcon() { return <svg width="18" height="18" viewBox="0 0 18 18" 
 function GearIcon()    { return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5"/><path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.22 4.22l1.41 1.41M12.37 12.37l1.41 1.41M4.22 13.78l1.41-1.41M12.37 5.63l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> }
 function PlusIcon()    { return <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 4v14M4 11h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg> }
 
-const SERVICE_OPTIONS = [
-  { id: 'all',              label: 'All' },
-  { id: 'ai-website',      label: 'AI Website',      color: '#0088FF' },
-  { id: 'ai-receptionist', label: 'AI Receptionist', color: '#00FF88' },
-  { id: 'both',            label: 'Both',            color: '#FFD700' },
+// Industry accent colors — rotate through a palette
+const INDUSTRY_COLORS = [
+  '#0088FF','#00FF88','#F59E0B','#8B5CF6','#EC4899',
+  '#10B981','#3B82F6','#EF4444','#F97316','#6366F1',
 ]
 
 function TaskBadge() {
@@ -48,34 +47,70 @@ function TaskBadge() {
   )
 }
 
-function ServiceBar() {
-  const { serviceFilter, setServiceFilter } = useCRM()
+function IndustryBar() {
+  const { leads, industryFilter, setIndustryFilter } = useCRM()
+
+  // Build tab list from actual lead data (dynamic — no empty tabs)
+  const activeLeads = leads.filter(l => !l.archived)
+  const industryMap = {}
+  activeLeads.forEach(l => {
+    const ind = l.industry || 'Other'
+    industryMap[ind] = (industryMap[ind] || 0) + 1
+  })
+  // Sort by lead count descending so busiest industry is first
+  const tabs = Object.entries(industryMap).sort((a, b) => b[1] - a[1])
+
   return (
-    <div className="service-bar bg-bg/90 backdrop-blur border-b border-white/[0.05] px-4 py-2.5">
-      <div className="flex gap-1.5 max-w-full overflow-x-auto pb-0.5">
-        {SERVICE_OPTIONS.map(opt => {
-          const active = serviceFilter === opt.id
+    <div className="service-bar bg-bg/90 backdrop-blur border-b border-white/[0.05] px-4 py-2">
+      <div className="flex gap-1.5 max-w-full overflow-x-auto pb-0.5 items-center">
+
+        {/* All tab */}
+        <button
+          onClick={() => setIndustryFilter('all')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            industryFilter === 'all'
+              ? 'bg-white text-black'
+              : 'text-white/45 hover:text-white/80 bg-white/[0.04] hover:bg-white/[0.08]'
+          }`}
+        >
+          All
+          <span className="ml-1.5 text-[10px] opacity-60">{activeLeads.length}</span>
+        </button>
+
+        {/* Divider */}
+        {tabs.length > 0 && <span className="w-px h-4 bg-white/10 flex-shrink-0 mx-0.5" />}
+
+        {/* Per-industry tabs */}
+        {tabs.map(([industry, count], i) => {
+          const active = industryFilter === industry
+          const color  = INDUSTRY_COLORS[i % INDUSTRY_COLORS.length]
           return (
             <button
-              key={opt.id}
-              onClick={() => setServiceFilter(opt.id)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              key={industry}
+              onClick={() => setIndustryFilter(industry)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 active
                   ? 'text-black'
-                  : 'text-white/40 hover:text-white/70 bg-white/[0.04] hover:bg-white/[0.08]'
+                  : 'text-white/45 hover:text-white/80 bg-white/[0.04] hover:bg-white/[0.08]'
               }`}
-              style={active ? { background: opt.color || '#fff', color: opt.id === 'all' ? '#000' : '#000' } : {}}
+              style={active ? { background: color, color: '#000' } : {}}
             >
-              {opt.id !== 'all' && (
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
-                  style={{ background: opt.color, opacity: active ? 1 : 0.5 }}
-                />
-              )}
-              {opt.label}
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ background: color, opacity: active ? 1 : 0.6 }}
+              />
+              {industry}
+              <span className="text-[10px] opacity-60">{count}</span>
             </button>
           )
         })}
+
+        {/* Empty state hint */}
+        {tabs.length === 0 && (
+          <span className="text-[11px] text-white/25 ml-2">
+            Add leads with an industry to see workspace tabs here
+          </span>
+        )}
       </div>
     </div>
   )
@@ -96,7 +131,7 @@ function KbdHints() {
 export default function Layout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { leads, activeModal, openModal, closeModal, serviceFilter } = useCRM()
+  const { leads, activeModal, openModal, closeModal, industryFilter } = useCRM()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Close sidebar on route change (mobile)
@@ -111,7 +146,12 @@ export default function Layout({ children }) {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/[0.05]">
           <h1 className="font-syne font-bold text-white text-lg tracking-tight">Park CRM</h1>
-          <p className="text-white/30 text-xs mt-0.5">{activeLeads.length} active leads</p>
+          <p className="text-white/30 text-xs mt-0.5">
+            {industryFilter === 'all'
+              ? `${activeLeads.length} leads · All Industries`
+              : `${activeLeads.filter(l => l.industry === industryFilter).length} leads · ${industryFilter}`
+            }
+          </p>
         </div>
 
         {/* Nav */}
@@ -195,8 +235,8 @@ export default function Layout({ children }) {
           <div className="w-6" />
         </header>
 
-        {/* Service filter bar */}
-        <ServiceBar />
+        {/* Industry workspace switcher */}
+        <IndustryBar />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

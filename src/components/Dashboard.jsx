@@ -11,8 +11,14 @@ import {
   getMonthlyClosedRevenue, getTotalMRR, getWeightedPipelineValue,
   getActivePipelineMRR, getDaysInStage, ACTIVE_STAGE_IDS,
   getCallAnalytics, WIN_REASONS, LOSS_REASONS,
+  filterByIndustry,
 } from '../utils/helpers'
 import TodaysHits from './TodaysHits'
+
+const INDUSTRY_COLORS = [
+  '#0088FF','#00FF88','#F59E0B','#8B5CF6','#EC4899',
+  '#10B981','#3B82F6','#EF4444','#F97316','#6366F1',
+]
 
 // ── Shared sub-components ──
 
@@ -165,11 +171,11 @@ function FollowUpRow({ lead, onClick }) {
 }
 
 export default function Dashboard() {
-  const { leads, settings, serviceFilter, openModal } = useCRM()
+  const { leads, settings, industryFilter, openModal } = useCRM()
   const navigate = useNavigate()
 
   const allActive = useMemo(() => leads.filter(l => !l.archived), [leads])
-  const filtered  = useMemo(() => filterByService(allActive, serviceFilter), [allActive, serviceFilter])
+  const filtered  = useMemo(() => filterByIndustry(allActive, industryFilter), [allActive, industryFilter])
 
   const closedWon   = useMemo(() => filtered.filter(l => l.stage === 'closed-won'), [filtered])
   const active      = useMemo(() => filtered.filter(l => ACTIVE_STAGE_IDS.includes(l.stage)), [filtered])
@@ -270,6 +276,49 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Workspace label ── */}
+      {industryFilter !== 'all' && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="text-[11px] text-white/30 font-semibold uppercase tracking-wider">Workspace:</span>
+          <span className="badge text-xs font-bold" style={{ background: 'rgba(0,136,255,0.15)', color: '#0088FF' }}>
+            {industryFilter}
+          </span>
+          <span className="text-[11px] text-white/25">{filtered.length} leads</span>
+        </div>
+      )}
+
+      {/* ── All-industry breakdown (only when viewing All) ── */}
+      {industryFilter === 'all' && (() => {
+        const byIndustry = {}
+        allActive.forEach(l => {
+          const ind = l.industry || 'Other'
+          if (!byIndustry[ind]) byIndustry[ind] = { count: 0, won: 0, mrr: 0 }
+          byIndustry[ind].count++
+          if (l.stage === 'closed-won') { byIndustry[ind].won++; byIndustry[ind].mrr += parseFloat(l.monthlyFee) || 0 }
+        })
+        const rows = Object.entries(byIndustry).sort((a,b) => b[1].count - a[1].count)
+        if (rows.length <= 1) return null
+        return (
+          <div className="glass rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-white/[0.05]">
+              <h2 className="font-syne font-bold text-white text-sm">All Industries Overview</h2>
+              <p className="text-[11px] text-white/30 mt-0.5">Click a tab above to filter by workspace</p>
+            </div>
+            <div className="divide-y divide-white/[0.04]">
+              {rows.map(([ind, stats], i) => (
+                <div key={ind} className="flex items-center gap-4 px-5 py-3">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length] }} />
+                  <span className="text-sm text-white font-medium flex-1">{ind}</span>
+                  <span className="text-xs text-white/40">{stats.count} leads</span>
+                  <span className="text-xs text-white/40">{stats.won} won</span>
+                  {stats.mrr > 0 && <span className="text-xs font-semibold" style={{ color: '#00FF88' }}>{formatCurrency(stats.mrr)}/mo</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Today's Hits ── */}
       <TodaysHits />

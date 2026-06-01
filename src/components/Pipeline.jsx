@@ -8,7 +8,7 @@ import { useCRM } from '../context/CRMContext'
 import {
   STAGES, SERVICES, HEAT_LEVELS, ACTIVE_STAGE_IDS, WIN_REASONS, LOSS_REASONS,
   computeFlags, getCardGlowClass, computeHeatScore, getHeatLevel, computeUrgency,
-  filterByService, formatCurrency, formatRelative, calculateLTV, daysSince, getDaysInStage,
+  filterByIndustry, formatCurrency, formatRelative, calculateLTV, daysSince, getDaysInStage,
   getActivePipelineMRR, getProjectedMRR,
 } from '../utils/helpers'
 
@@ -246,13 +246,13 @@ function RevenueBar({ leads, settings, updateSettings }) {
 
 // ── Main Pipeline ──
 export default function Pipeline() {
-  const { leads, settings, serviceFilter, changeStage, quickLog, setWinLossReason, updateSettings } = useCRM()
+  const { leads, settings, industryFilter, changeStage, quickLog, setWinLossReason, updateSettings } = useCRM()
   const [activeId, setActiveId]     = useState(null)
   const [showClosed, setShowClosed] = useState(false)
 
   const filtered = useMemo(() =>
-    filterByService(leads.filter(l => !l.archived), serviceFilter),
-    [leads, serviceFilter]
+    filterByIndustry(leads.filter(l => !l.archived), industryFilter),
+    [leads, industryFilter]
   )
 
   const visibleStages = useMemo(() =>

@@ -182,12 +182,6 @@ export default function Dashboard() {
   const active      = useMemo(() => filtered.filter(l => ACTIVE_STAGE_IDS.includes(l.stage)), [filtered])
   const callStats   = useMemo(() => getCallAnalytics(allActive), [allActive])
 
-  // Win rate = closed-won ÷ (closed-won + closed-lost) — only counts decided deals
-  const winRate = useMemo(() => {
-    const decided = closedWon.length + closedLost.length
-    return decided > 0 ? Math.round((closedWon.length / decided) * 100) : 0
-  }, [closedWon, closedLost])
-
   // Meetings booked = any lead that has EVER reached Booked Meeting or Meeting Held stage
   const meetingsBooked = useMemo(() =>
     allActive.filter(l =>
@@ -198,6 +192,19 @@ export default function Dashboard() {
       )
     ).length
   , [allActive])
+
+  // Win rate = closed-won ÷ total calls dialed (shown as 00.00%)
+  const winRate = useMemo(() => {
+    const calls = callStats.totalCalls
+    if (!calls) return null
+    return (closedWon.length / calls * 100).toFixed(2)
+  }, [closedWon, callStats.totalCalls])
+
+  // Meeting success rate = closed-won ÷ meetings ever booked (shown as 00.00%)
+  const meetingWonRate = useMemo(() => {
+    if (!meetingsBooked) return null
+    return (closedWon.length / meetingsBooked * 100).toFixed(2)
+  }, [closedWon, meetingsBooked])
 
   // ── Revenue ──
   const monthMRR       = useMemo(() => getMonthlyClosedRevenue(filtered), [filtered])
@@ -359,17 +366,26 @@ export default function Dashboard() {
           </div>
           <div className="glass rounded-2xl p-4">
             <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Win Rate</p>
-            <p className="font-syne font-bold text-2xl" style={{ color: winRate >= 30 ? '#00FF88' : winRate >= 15 ? '#F59E0B' : winRate > 0 ? '#EF4444' : '#fff' }}>
-              {winRate > 0 ? `${winRate}%` : '—'}
+            <p className="font-syne font-bold text-2xl font-mono" style={{ color: parseFloat(winRate) >= 5 ? '#00FF88' : parseFloat(winRate) > 0 ? '#F59E0B' : '#fff' }}>
+              {winRate !== null ? `${winRate}%` : '0.00%'}
             </p>
             <p className="text-[11px] text-white/30 mt-1">
-              {closedWon.length}W · {closedLost.length}L of {closedWon.length + closedLost.length} decided
+              {closedWon.length} won · {callStats.totalCalls} calls dialed
             </p>
           </div>
           <div className="glass rounded-2xl p-4">
             <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Meetings Booked</p>
             <p className="font-syne font-bold text-2xl text-white">{meetingsBooked}</p>
-            <p className="text-[11px] text-white/30 mt-1">ever reached booking</p>
+            <p className="text-[11px] text-white/30 mt-1">all time</p>
+          </div>
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Meeting → Won</p>
+            <p className="font-syne font-bold text-2xl font-mono" style={{ color: parseFloat(meetingWonRate) >= 20 ? '#00FF88' : parseFloat(meetingWonRate) > 0 ? '#F59E0B' : '#fff' }}>
+              {meetingWonRate !== null ? `${meetingWonRate}%` : '0.00%'}
+            </p>
+            <p className="text-[11px] text-white/30 mt-1">
+              {closedWon.length} won of {meetingsBooked} meetings
+            </p>
           </div>
         </div>
       </div>

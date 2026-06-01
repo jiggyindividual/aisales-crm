@@ -178,8 +178,26 @@ export default function Dashboard() {
   const filtered  = useMemo(() => filterByIndustry(allActive, industryFilter), [allActive, industryFilter])
 
   const closedWon   = useMemo(() => filtered.filter(l => l.stage === 'closed-won'), [filtered])
+  const closedLost  = useMemo(() => filtered.filter(l => l.stage === 'closed-lost'), [filtered])
   const active      = useMemo(() => filtered.filter(l => ACTIVE_STAGE_IDS.includes(l.stage)), [filtered])
   const callStats   = useMemo(() => getCallAnalytics(allActive), [allActive])
+
+  // Win rate = closed-won ÷ (closed-won + closed-lost) — only counts decided deals
+  const winRate = useMemo(() => {
+    const decided = closedWon.length + closedLost.length
+    return decided > 0 ? Math.round((closedWon.length / decided) * 100) : 0
+  }, [closedWon, closedLost])
+
+  // Meetings booked = any lead that has EVER reached Booked Meeting or Meeting Held stage
+  const meetingsBooked = useMemo(() =>
+    allActive.filter(l =>
+      l.stage === 'contacted-interested' ||
+      l.stage === 'demo-sent' ||
+      (l.stageHistory || []).some(h =>
+        h.stage === 'contacted-interested' || h.stage === 'demo-sent'
+      )
+    ).length
+  , [allActive])
 
   // ── Revenue ──
   const monthMRR       = useMemo(() => getMonthlyClosedRevenue(filtered), [filtered])
@@ -340,18 +358,18 @@ export default function Dashboard() {
             <p className="text-[11px] text-white/30 mt-1">answered ÷ dialed</p>
           </div>
           <div className="glass rounded-2xl p-4">
-            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Close Rate</p>
-            <p className="font-syne font-bold text-2xl" style={{ color: callStats.closeRate >= 10 ? '#00FF88' : '#F59E0B' }}>
-              {callStats.closeRate}%
+            <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Win Rate</p>
+            <p className="font-syne font-bold text-2xl" style={{ color: winRate >= 30 ? '#00FF88' : winRate >= 15 ? '#F59E0B' : winRate > 0 ? '#EF4444' : '#fff' }}>
+              {winRate > 0 ? `${winRate}%` : '—'}
             </p>
-            <p className="text-[11px] text-white/30 mt-1">{callStats.closedWon} won</p>
+            <p className="text-[11px] text-white/30 mt-1">
+              {closedWon.length}W · {closedLost.length}L of {closedWon.length + closedLost.length} decided
+            </p>
           </div>
           <div className="glass rounded-2xl p-4">
             <p className="text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">Meetings Booked</p>
-            <p className="font-syne font-bold text-2xl text-white">
-              {allActive.filter(l => l.stage === 'contacted-interested' || l.stage === 'demo-sent').length}
-            </p>
-            <p className="text-[11px] text-white/30 mt-1">booked or held</p>
+            <p className="font-syne font-bold text-2xl text-white">{meetingsBooked}</p>
+            <p className="text-[11px] text-white/30 mt-1">ever reached booking</p>
           </div>
         </div>
       </div>
